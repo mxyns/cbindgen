@@ -657,7 +657,7 @@ impl Item for Enum {
 
         let monomorph = Enum::new(
             mangled_path,
-            self.path.clone(),
+            self.unmangled_path.clone(),
             GenericParams::default(),
             self.repr,
             self.variants
@@ -775,10 +775,7 @@ impl Enum {
         tag_name: &str,
     ) {
         // Only emit the tag enum once if merge_generic_tags is set.
-        if config.language != Language::Cxx
-            && config.enumeration.merge_generic_tags
-            && self.tag_written.get()
-        {
+        if config.enumeration.merge_generic_tags && self.tag_written.get() {
             return;
         }
         self.tag_written.set(true);
