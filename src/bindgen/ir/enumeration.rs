@@ -270,9 +270,13 @@ impl EnumVariant {
         mappings: &[(&Path, &GenericArgument)],
         config: &Config,
     ) -> Self {
+        let name = if config.enumeration.merge_generic_tags {
+            self.name.clone()
+        } else {
+            mangle::mangle_name(&self.name, generic_values, &config.export.mangle)
+        };
         Self::new(
-            // mangle::mangle_name(&self.name, generic_values, &config.export.mangle),
-            self.name.clone(),
+            name,
             self.discriminant.clone(),
             self.body.specialize(generic_values, mappings, config),
             self.cfg.clone(),
@@ -321,7 +325,9 @@ impl Source for EnumVariant {
 #[derive(Debug, Clone)]
 pub struct Enum {
     pub path: Path,
+    pub unmangled_path: Path,
     pub export_name: String,
+    pub unmangled_export_name: String,
     pub generic_params: GenericParams,
     pub repr: Repr,
     pub variants: Vec<EnumVariant>,
@@ -434,6 +440,7 @@ impl Enum {
         };
 
         Ok(Enum::new(
+            path.clone(),
             path,
             generic_params,
             repr,
@@ -448,6 +455,7 @@ impl Enum {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         path: Path,
+        unmangled_path: Path,
         generic_params: GenericParams,
         repr: Repr,
         variants: Vec<EnumVariant>,
@@ -457,9 +465,12 @@ impl Enum {
         documentation: Documentation,
     ) -> Self {
         let export_name = path.name().to_owned();
+        let unmangled_export_name = unmangled_path.name().to_owned();
         Self {
             path,
+            unmangled_path,
             export_name,
+            unmangled_export_name,
             generic_params,
             repr,
             variants,
@@ -522,8 +533,12 @@ impl Item for Enum {
 
         if config.language != Language::Cxx && self.tag.is_some() {
             // it makes sense to always prefix Tag with type name in C
-            //let new_tag = format!("{}_Tag", self.export_name);
-            let new_tag = format!("{}_Tag", self.path.name().split_once('_').unwrap().0);
+            let base_name = if config.enumeration.merge_generic_tags {
+                &self.unmangled_export_name
+            } else {
+                &self.export_name
+            };
+            let new_tag = format!("{}_Tag", base_name);
             if self.repr.style == ReprStyle::Rust {
                 for variant in &mut self.variants {
                     if let VariantBody::Body { ref mut body, .. } = variant.body {
@@ -634,6 +649,7 @@ impl Item for Enum {
 
         let monomorph = Enum::new(
             mangled_path,
+            self.path.clone(),
             GenericParams::default(),
             self.repr,
             self.variants
