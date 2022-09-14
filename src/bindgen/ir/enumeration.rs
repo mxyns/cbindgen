@@ -2,7 +2,9 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
+use std::cell::Cell;
 use std::io::Write;
+use std::rc::Rc;
 
 use syn::ext::IdentExt;
 
@@ -332,6 +334,8 @@ pub struct Enum {
     pub repr: Repr,
     pub variants: Vec<EnumVariant>,
     pub tag: Option<String>,
+    /// Keep track of whether any instance of this enum has had its tag written.
+    pub tag_written: Rc<Cell<bool>>,
     pub cfg: Option<Cfg>,
     pub annotations: AnnotationSet,
     pub documentation: Documentation,
@@ -446,6 +450,7 @@ impl Enum {
             repr,
             variants,
             tag,
+            Rc::new(Cell::new(false)),
             Cfg::append(mod_cfg, Cfg::load(&item.attrs)),
             annotations,
             Documentation::load(&item.attrs),
@@ -460,6 +465,7 @@ impl Enum {
         repr: Repr,
         variants: Vec<EnumVariant>,
         tag: Option<String>,
+        tag_written: Rc<Cell<bool>>,
         cfg: Option<Cfg>,
         annotations: AnnotationSet,
         documentation: Documentation,
@@ -475,6 +481,7 @@ impl Enum {
             repr,
             variants,
             tag,
+            tag_written,
             cfg,
             annotations,
             documentation,
@@ -657,6 +664,7 @@ impl Item for Enum {
                 .map(|v| v.specialize(generic_values, &mappings, library.get_config()))
                 .collect(),
             self.tag.clone(),
+            self.tag_written.clone(),
             self.cfg.clone(),
             self.annotations.clone(),
             self.documentation.clone(),
@@ -765,6 +773,15 @@ impl Enum {
         has_data: bool,
         tag_name: &str,
     ) {
+        // Only emit the tag enum once if merge_generic_tags is set.
+        if config.language != Language::Cxx
+            && config.enumeration.merge_generic_tags
+            && self.tag_written.get()
+        {
+            return;
+        }
+        self.tag_written.set(true);
+
         // Open the tag enum.
         match config.language {
             Language::C => {
