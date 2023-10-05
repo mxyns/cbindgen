@@ -50,6 +50,9 @@ pub enum RenameRule {
     /// Converts the identifier to SCREAMING_SNAKE_CASE and prefixes enum variants
     /// with the enum name.
     QualifiedScreamingSnakeCase,
+    /// Converts the identifier from bindgen's c-naming to C type naming
+    /// struct_X becomes struct X
+    CNaming
 }
 
 impl RenameRule {
@@ -89,6 +92,23 @@ impl RenameRule {
 
                 result.push_str(&RenameRule::ScreamingSnakeCase.apply(text, context));
                 result
+            }
+            RenameRule::CNaming => {
+                match context {
+                    IdentifierType::StructMember
+                    | IdentifierType::EnumVariant { .. }
+                    | IdentifierType::FunctionArg
+                    | IdentifierType::Enum => text.to_string(),
+                    IdentifierType::Type => if text.starts_with("struct_") {
+
+                        let result = text.replacen("struct_", "struct ", 1);
+                        // println!("cnaming from {} to {}", text, result);
+                        result
+                    } else {
+                        text.to_string()
+                    }
+
+                }
             }
         })
     }
@@ -131,6 +151,10 @@ impl FromStr for RenameRule {
             "QUALIFIED_SCREAMING_SNAKE_CASE" => Ok(RenameRule::QualifiedScreamingSnakeCase),
             "QualifiedScreamingSnakeCase" => Ok(RenameRule::QualifiedScreamingSnakeCase),
             "qualified_screaming_snake_case" => Ok(RenameRule::QualifiedScreamingSnakeCase),
+
+            "C_NAMING" => Ok(RenameRule::CNaming),
+            "CNaming" => Ok(RenameRule::CNaming),
+            "c_naming" => Ok(RenameRule::CNaming),
 
             _ => Err(format!("Unrecognized RenameRule: '{}'.", s)),
         }
