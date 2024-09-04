@@ -484,8 +484,14 @@ impl LanguageBackend for CLikeLanguageBackend<'_> {
             e.open_struct_or_union(self.config, out, inline_tag_field);
         }
 
-        // Emit the tag enum and everything related to it.
-        e.write_tag_enum(self.config, self, out, size, Self::write_enum_variant);
+        // Do not write an enum for the type if the tag is external
+        // The tag is external in case of a generic enum. During monomorphization,
+        // a single tag enum is generated for all monomorphs by creating
+        // an additional dummy monomorph which is the tag enum.
+        if !e.external_tag {
+            // Emit the tag enum and everything related to it.
+            e.write_tag_enum(self.config, self, out, size, Self::write_enum_variant);
+        }
 
         // If the enum has data, we need to emit structs for the variants and gather them together.
         if has_data {
